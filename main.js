@@ -158,7 +158,10 @@ function getOAuthProtocol() {
 }
 
 const OAUTH_PROTOCOL = getOAuthProtocol();
-const { isEagleConnectDeepLink, handleEagleConnectDeepLink } = require("./src/helpers/eagleConnect");
+const {
+  isEagleConnectDeepLink,
+  handleEagleConnectDeepLink,
+} = require("./src/helpers/eagleConnect");
 
 function connectEagleFlow(url) {
   return handleEagleConnectDeepLink(url, {

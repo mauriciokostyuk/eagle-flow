@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertCircle } from "./icons";
-import { CompactAuthenticationFlow } from "./CompactAuthenticationFlow";
 import UseCaseStep from "./onboarding/UseCaseStep";
 import { hasUseCaseIntent } from "./onboarding/useCases";
 import OnboardingShell, { OnboardingStepHeader } from "./onboarding/OnboardingShell";
@@ -116,15 +115,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
     clearSession,
   } = useOnboardingSession();
 
-  const handleLogout = useCallback(async () => {
-    await signOut();
-    resetOnboardingProgress(localStorage);
-    window.location.reload();
-  }, []);
-  // Set by Back on the permissions step: a signed-in user who asked to return to
-  // the auth step gets the welcome screen (where Log out lives), not auto-advance.
-  const [returnedToAuth, setReturnedToAuth] = useState(false);
-
   const { dictationHotkeyConfirmed, assistantHotkeyConfirmed } = session.resume;
   const [dictationHotkey, setDictationHotkey] = useState(() =>
     resolveOnboardingDictationHotkey({
@@ -186,18 +176,6 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const setAssistantDemoSuccess = useCallback(
     (successful: boolean) => updateResumeFlag("assistantDemoCompleted", successful),
     [updateResumeFlag]
-  );
-  const updateAuthResumeState = useCallback(
-    (patch: Partial<OnboardingAuthDraft>) => {
-      setSession((current) => ({
-        ...current,
-        resume: {
-          ...current.resume,
-          auth: { ...current.resume.auth, ...patch },
-        },
-      }));
-    },
-    [setSession]
   );
 
   useClipboard((dialog) =>
@@ -688,11 +666,30 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   // writing provider or model settings, just as if that had been their final
   // step originally.
   useEffect(() => {
-    if (!skipSetupChoiceForEnterprise || session.currentStepId !== "setup-choice" || isFinishing) {
+    // Eagle Flow: guests never see the setup choice either. The provider comes
+    // preconfigured (Eagle Eye proxy, see eagleConnect.js), so finishing as
+    // "managed" keeps those defaults instead of writing new ones.
+    const skipSetupChoice = skipSetupChoiceForEnterprise || session.authPath === "guest";
+    if (!skipSetupChoice || session.currentStepId !== "setup-choice" || isFinishing) {
       return;
     }
     void finalizeOnboarding("managed");
-  }, [finalizeOnboarding, isFinishing, session.currentStepId, skipSetupChoiceForEnterprise]);
+  }, [
+    finalizeOnboarding,
+    isFinishing,
+    session.authPath,
+    session.currentStepId,
+    skipSetupChoiceForEnterprise,
+  ]);
+
+  // Eagle Flow has no OpenWhispr account: the auth step always continues as a
+  // guest. The team signs in through Eagle Eye (Ferramentas > Eagle Flow >
+  // Conectar) instead.
+  useEffect(() => {
+    if (session.currentStepId !== "auth") return;
+    setAuthPath("guest");
+    goTo("permissions");
+  }, [goTo, session.currentStepId, setAuthPath]);
 
   const applyReasoningSelectionToAllScopes = useCallback(
     (mode: "byok" | "local") => {
@@ -905,29 +902,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
   const renderStep = () => {
     switch (currentStepId) {
       case "auth":
-        return (
-          <div className="min-h-full w-full">
-            <CompactAuthenticationFlow
-              resumeState={session.resume.auth}
-              onResumeStateChange={updateAuthResumeState}
-              autoContinue={!returnedToAuth}
-              onSignOut={() => void handleLogout()}
-              onContinueWithoutAccount={() => {
-                // Guests continue onto their route's permissions step — jumping
-                // straight to setup-choice would skip the permission grants and
-                // hotkey the guest route exists to guarantee (see flow.ts).
-                setReturnedToAuth(false);
-                setAuthPath("guest");
-                goTo("permissions");
-              }}
-              onAuthComplete={() => {
-                setReturnedToAuth(false);
-                setAuthPath("account");
-                goTo(session.setupMode === "cloud" ? "setup-choice" : "permissions");
-              }}
-            />
-          </div>
-        );
+        // Skipped by the effect above (Eagle Flow has no OpenWhispr account).
+        return null;
 
       case "required-models":
         return (
@@ -966,14 +942,8 @@ export default function OnboardingFlow({ onComplete }: OnboardingFlowProps) {
                   }
                 : undefined
             }
-            onBack={
-              session.history.length > 0
-                ? () => {
-                    setReturnedToAuth(true);
-                    goBack();
-                  }
-                : undefined
-            }
+            // Permissions is the first step: there is no auth step to go back to.
+            onBack={undefined}
             onContinue={() => void continueFromCurrentStep()}
           />
         );

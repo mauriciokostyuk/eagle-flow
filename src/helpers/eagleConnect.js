@@ -28,7 +28,10 @@ function parseEagleConnectToken(url) {
  * Salva o token como chave do provedor "custom" e recarrega as janelas, que
  * hidratam a chave do processo principal ao iniciar.
  */
-function handleEagleConnectDeepLink(url, { environmentManager, BrowserWindow, Notification, logger }) {
+function handleEagleConnectDeepLink(
+  url,
+  { environmentManager, BrowserWindow, Notification, logger }
+) {
   const token = parseEagleConnectToken(url);
   if (!token || !environmentManager) {
     logger?.warn?.("[EagleConnect] link de conexão inválido");
