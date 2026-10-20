@@ -49,6 +49,7 @@ jobs:
         with:
           node-version: "24"
       - run: npm ci
+      - run: node scripts/build-globe.js ${{ matrix.arch }}
       - run: npx electron-builder --mac --${{ matrix.arch }} --publish always
         env:
           GH_TOKEN: ${{ github.token }}

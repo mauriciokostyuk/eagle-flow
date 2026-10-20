@@ -32,12 +32,20 @@ const ROTULO_MOD_WIN = {
 const TECLA_VALIDA =
   /^([A-Z0-9]|F([1-9]|1[0-9]|2[0-4])|Space|Tab|Backspace|Delete|Insert|Home|End|PageUp|PageDown|Up|Down|Left|Right|Enter)$/;
 
+// Fn / Globo (só Mac): lida pelo leitor próprio em native/, igual ao Wispr Flow.
+const FN = "Fn";
+
 function padraoDoSistema(platform) {
-  return platform === "darwin" ? "RightOption" : "RightCtrl";
+  return platform === "darwin" ? FN : "RightCtrl";
 }
 
+function ehFn(atalho) {
+  return atalho === FN;
+}
+
+/** Tecla segurada sozinha (Fn ou modificador direito): toque rápido é engano. */
 function ehModificadorSozinho(atalho) {
-  return Object.prototype.hasOwnProperty.call(MODIFICADORES_SOZINHOS, atalho);
+  return ehFn(atalho) || Object.prototype.hasOwnProperty.call(MODIFICADORES_SOZINHOS, atalho);
 }
 
 /**
@@ -61,6 +69,7 @@ function validarAtalho(atalho) {
 
 function rotuloDoAtalho(atalho, platform) {
   const mac = platform === "darwin";
+  if (ehFn(atalho)) return "Fn (tecla do globo)";
   if (ehModificadorSozinho(atalho)) {
     return MODIFICADORES_SOZINHOS[atalho][mac ? "mac" : "win"];
   }
@@ -74,6 +83,8 @@ function rotuloDoAtalho(atalho, platform) {
 module.exports = {
   MODIFICADORES_SOZINHOS,
   padraoDoSistema,
+  FN,
+  ehFn,
   ehModificadorSozinho,
   validarAtalho,
   rotuloDoAtalho,

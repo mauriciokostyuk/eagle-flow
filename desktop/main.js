@@ -17,10 +17,11 @@ const {
 } = require("electron");
 const fs = require("fs");
 const path = require("path");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const { createHotkeyMachine } = require("./hotkey");
 const {
   MODIFICADORES_SOZINHOS,
+  ehFn,
   ehModificadorSozinho,
   padraoDoSistema,
   rotuloDoAtalho,
@@ -169,7 +170,7 @@ function enviarPilula(canal) {
 }
 
 const atalho = createHotkeyMachine({
-  holdSupported: () => uioRodando,
+  holdSupported: () => (ehFn(atalhoAtual) ? globeRodando : uioRodando),
   tapToggles: () => !ehModificadorSozinho(atalhoAtual),
   onStart: () => {
     posicionarPilula();
@@ -192,6 +193,7 @@ function iniciarLeitorDeTeclas() {
         : null;
     uIOhook.on("keydown", (e) => {
       if (e.keycode === UiohookKey.Escape) return atalho.escape();
+      if (ehFn(atalhoAtual)) return; // Fn vem do leitor próprio
       const sozinha = teclaSozinha();
       if (sozinha === null) return;
       if (e.keycode === sozinha) atalho.press();
@@ -200,6 +202,7 @@ function iniciarLeitorDeTeclas() {
       else if (atalho.state === "holding") atalho.escape();
     });
     uIOhook.on("keyup", (e) => {
+      if (ehFn(atalhoAtual)) return;
       const sozinha = teclaSozinha();
       // Combinação: soltar qualquer tecla dela termina; modificador: só ele.
       if (sozinha === null || e.keycode === sozinha) atalho.release();
@@ -211,8 +214,67 @@ function iniciarLeitorDeTeclas() {
   }
 }
 
+// ── Tecla Fn / Globo (Mac) ─────────────────────────────────────────────────
+// Leitor em Swift (native/macos-globe-listener.swift). Enquanto roda, faz o
+// Mac ignorar a ação padrão do globo (emoji/ditado) e devolve ao sair.
+
+let globe = null;
+let globeRodando = false;
+
+function caminhoGlobe() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "bin", "globe-listener")
+    : path.join(__dirname, "build", "bin", "globe-listener");
+}
+
+function pararGlobe() {
+  if (globe) globe.kill("SIGTERM");
+  globe = null;
+  globeRodando = false;
+}
+
+function iniciarGlobe() {
+  if (!isMac || globe) return;
+  if (!systemPreferences.isTrustedAccessibilityClient(false)) return;
+  const bin = caminhoGlobe();
+  if (!fs.existsSync(bin)) return;
+  globe = spawn(
+    bin,
+    [
+      "--suppress-system-globe-action",
+      "--globe-preference-state",
+      path.join(app.getPath("userData"), "globe-state.json"),
+    ],
+    { stdio: ["ignore", "pipe", "ignore"] }
+  );
+  globeRodando = true;
+  let resto = "";
+  globe.stdout.on("data", (dados) => {
+    resto += dados;
+    let i;
+    while ((i = resto.indexOf("\n")) >= 0) {
+      const linha = resto.slice(0, i).trim();
+      resto = resto.slice(i + 1);
+      if (!ehFn(atalhoAtual)) continue;
+      if (linha === "FN_DOWN") atalho.press();
+      else if (linha === "FN_UP") atalho.release();
+      else if (linha === "FN_INTERRUPTED") atalho.escape();
+    }
+  });
+  globe.on("exit", () => {
+    globe = null;
+    globeRodando = false;
+  });
+}
+
 function registrarAtalho(novo) {
   globalShortcut.unregisterAll();
+  if (ehFn(novo)) {
+    if (!isMac) return false;
+    iniciarGlobe();
+    return true;
+  }
+  pararGlobe();
   if (ehModificadorSozinho(novo)) return true;
   try {
     // No Windows a tecla Windows se chama "Super" pro Electron.
@@ -242,8 +304,8 @@ function infoAtalho() {
   return {
     atalho: atalhoAtual,
     rotulo: rotuloDoAtalho(atalhoAtual, process.platform),
-    // Modificador sozinho só funciona com o leitor de teclas ligado.
-    pronto: !ehModificadorSozinho(atalhoAtual) || uioRodando,
+    // Fn e modificador sozinho só funcionam com o leitor ligado (Acessibilidade).
+    pronto: ehFn(atalhoAtual) ? globeRodando : !ehModificadorSozinho(atalhoAtual) || uioRodando,
   };
 }
 
@@ -369,7 +431,14 @@ function criarBandeja() {
 
 app.on("second-instance", abrirPrincipal);
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // A tela vem do Eagle Eye, que é um PWA com cache próprio. Limpa esse cache
+  // na abertura pra cada ajuste publicado chegar na hora (o login fica).
+  await session.defaultSession
+    .clearStorageData({ storages: ["serviceworkers", "cachestorage"] })
+    .catch(() => {});
+  await session.defaultSession.clearCache().catch(() => {});
+
   // Microfone só para o Eagle Eye.
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
     cb(permission === "media" && deEagleEye(wc.getURL()));
@@ -397,9 +466,10 @@ app.whenReady().then(() => {
   }
   iniciarLeitorDeTeclas();
   // No Mac o leitor só liga depois de liberar Acessibilidade.
-  const tentar = setInterval(() => {
+  // Também religa o leitor do Fn se ele cair.
+  setInterval(() => {
     iniciarLeitorDeTeclas();
-    if (uioRodando) clearInterval(tentar);
+    if (ehFn(atalhoAtual)) iniciarGlobe();
   }, 3000);
 });
 
@@ -408,6 +478,7 @@ app.on("window-all-closed", () => {});
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  pararGlobe();
   if (uioRodando) {
     try {
       uio.uIOhook.stop();

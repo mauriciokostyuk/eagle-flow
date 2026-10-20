@@ -1,7 +1,7 @@
 {
   "name": "eagle-flow-desktop",
   "productName": "Eagle Flow",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Eagle Flow: motor de ditado por voz. Tela e regras vêm do Eagle Eye.",
   "main": "main.js",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist:mac": "electron-builder --mac --publish always",
+    "dist:mac": "node scripts/build-globe.js && electron-builder --mac --publish always",
     "dist:win": "electron-builder --win --publish always"
   },
   "dependencies": {
@@ -23,12 +23,29 @@
   "build": {
     "appId": "com.eaglemidiadigital.eagleflow",
     "productName": "Eagle Flow",
-    "directories": { "output": "dist", "buildResources": "build" },
-    "files": ["main.js", "preload.js", "hotkey.js", "atalhos.js", "offline.html", "build/trayTemplate@3x.png", "build/icon.png", "package.json"],
-    "asarUnpack": ["node_modules/uiohook-napi/**"],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "hotkey.js",
+      "atalhos.js",
+      "offline.html",
+      "build/trayTemplate@3x.png",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/uiohook-napi/**"
+    ],
     "npmRebuild": false,
     "mac": {
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "artifactName": "EagleFlow-mac-${arch}.${ext}",
       "icon": "build/icon.icns",
       "identity": "-",
@@ -37,14 +54,25 @@
       "extendInfo": {
         "LSUIElement": true,
         "NSMicrophoneUsageDescription": "O Eagle Flow usa o microfone para transcrever o que você fala."
-      }
+      },
+      "extraResources": [
+        {
+          "from": "build/bin/globe-listener",
+          "to": "bin/globe-listener"
+        }
+      ]
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "artifactName": "EagleFlow-windows-setup.${ext}",
       "icon": "build/icon.ico"
     },
-    "nsis": { "oneClick": true, "perMachine": false },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false
+    },
     "publish": {
       "provider": "github",
       "owner": "mauriciokostyuk",

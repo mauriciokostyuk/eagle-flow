@@ -3,7 +3,7 @@ const assert = require("node:assert");
 const { validarAtalho, rotuloDoAtalho, padraoDoSistema } = require("../atalhos");
 
 test("padrão não conflita: tecla modificadora direita sozinha", () => {
-  assert.equal(padraoDoSistema("darwin"), "RightOption");
+  assert.equal(padraoDoSistema("darwin"), "Fn");
   assert.equal(padraoDoSistema("win32"), "RightCtrl");
 });
 
@@ -26,4 +26,9 @@ test("rótulo por sistema", () => {
   assert.equal(rotuloDoAtalho("RightOption", "darwin"), "Option direito");
   assert.equal(rotuloDoAtalho("Alt+Space", "darwin"), "Option + Espaço");
   assert.equal(rotuloDoAtalho("Control+Shift+Space", "win32"), "Ctrl + Shift + Espaço");
+});
+
+test("Fn é aceito e tem rótulo próprio", () => {
+  assert.equal(validarAtalho("Fn").ok, true);
+  assert.equal(rotuloDoAtalho("Fn", "darwin"), "Fn (tecla do globo)");
 });
