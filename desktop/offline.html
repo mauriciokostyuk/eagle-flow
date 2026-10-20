@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>Eagle Flow</title>
+<style>
+  html, body { margin: 0; height: 100%; background: linear-gradient(135deg, #020925, #0d2662); color: #fff;
+    font-family: -apple-system, system-ui, sans-serif; }
+  main { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; text-align: center; }
+  p { color: rgba(255,255,255,.7); max-width: 360px; margin: 0; }
+  button { min-height: 44px; padding: 0 20px; border: 0; border-radius: 8px; background: #2b62d6; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <h1 style="margin:0;font-size:20px">Sem conexão com o Eagle Eye</h1>
+  <p>Confira a internet. O Eagle Flow precisa dela pra transcrever.</p>
+  <button type="button" id="r">Tentar de novo</button>
+</main>
+<script>
+  document.getElementById("r").onclick = () => {
+    const url = new URLSearchParams(location.search).get("url");
+    if (url && url.startsWith("https://")) location.href = url;
+  };
+</script>
+</body>
+</html>

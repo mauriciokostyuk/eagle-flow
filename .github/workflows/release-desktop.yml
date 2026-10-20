@@ -1,0 +1,71 @@
+name: Release Eagle Flow (motor)
+
+# Gera os instaladores do motor (pasta desktop/). Só precisa rodar quando o
+# motor muda; tela e regras são publicadas no Eagle Eye.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm test
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Criar o release antes dos builds (evita release duplicado)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(node -p "require('./desktop/package.json').version")"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "Eagle Flow $TAG" --notes "Motor do Eagle Flow. Tela e regras vêm do Eagle Eye."
+
+  mac:
+    needs: release
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x64]
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npx electron-builder --mac --${{ matrix.arch }} --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+  windows:
+    needs: release
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm ci
+      - run: npx electron-builder --win --x64 --publish always
+        env:
+          GH_TOKEN: ${{ github.token }}

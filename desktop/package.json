@@ -1,0 +1,55 @@
+{
+  "name": "eagle-flow-desktop",
+  "productName": "Eagle Flow",
+  "version": "2.0.0",
+  "description": "Eagle Flow: motor de ditado por voz. Tela e regras vêm do Eagle Eye.",
+  "main": "main.js",
+  "private": true,
+  "author": "Eagle Mídia Digital",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist:mac": "electron-builder --mac --publish always",
+    "dist:win": "electron-builder --win --publish always"
+  },
+  "dependencies": {
+    "uiohook-napi": "1.5.5"
+  },
+  "devDependencies": {
+    "electron": "41.10.7",
+    "electron-builder": "26.4.0"
+  },
+  "build": {
+    "appId": "com.eaglemidiadigital.eagleflow",
+    "productName": "Eagle Flow",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "hotkey.js", "offline.html", "build/trayTemplate@3x.png", "build/icon.png", "package.json"],
+    "asarUnpack": ["node_modules/uiohook-napi/**"],
+    "npmRebuild": false,
+    "mac": {
+      "target": ["dmg", "zip"],
+      "artifactName": "EagleFlow-mac-${arch}.${ext}",
+      "icon": "build/icon.icns",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "category": "public.app-category.productivity",
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSMicrophoneUsageDescription": "O Eagle Flow usa o microfone para transcrever o que você fala."
+      }
+    },
+    "win": {
+      "target": ["nsis"],
+      "artifactName": "EagleFlow-windows-setup.${ext}",
+      "icon": "build/icon.ico"
+    },
+    "nsis": { "oneClick": true, "perMachine": false },
+    "publish": {
+      "provider": "github",
+      "owner": "mauriciokostyuk",
+      "repo": "eagle-flow",
+      "releaseType": "release"
+    }
+  }
+}
