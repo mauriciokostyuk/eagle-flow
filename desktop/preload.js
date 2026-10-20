@@ -16,4 +16,6 @@ contextBridge.exposeInMainWorld("eagleFlowShell", {
   openMain: () => ipcRenderer.send("ef:open-main"),
   permissoes: () => ipcRenderer.invoke("ef:permissoes"),
   pedirPermissoes: () => ipcRenderer.invoke("ef:pedir-permissoes"),
+  getAtalho: () => ipcRenderer.invoke("ef:get-atalho"),
+  setAtalho: (atalho) => ipcRenderer.invoke("ef:set-atalho", String(atalho)),
 });

@@ -1,13 +1,26 @@
 // Máquina de estados do atalho (pura, testada em test/hotkey.test.js).
 //
 // - Segurar o atalho e soltar: grava enquanto segura.
-// - Toque rápido: liga; outro toque: desliga.
+// - Toque rápido: liga; outro toque: desliga (só em atalho com tecla comum;
+//   numa tecla modificadora sozinha, como o Option direito, toque rápido é
+//   engano e cancela).
 // - Esc durante a gravação: cancela.
 // Sem o leitor de teclas (uiohook), não há "soltar": tudo vira toque.
 
 const HOLD_MS = 350;
 
-function createHotkeyMachine({ holdSupported, onStart, onStop, onCancel, now = Date.now }) {
+function valor(v) {
+  return typeof v === "function" ? v() : v;
+}
+
+function createHotkeyMachine({
+  holdSupported,
+  tapToggles = true,
+  onStart,
+  onStop,
+  onCancel,
+  now = Date.now,
+}) {
   let state = "idle"; // idle | holding | toggled
   let pressedAt = 0;
 
@@ -17,8 +30,7 @@ function createHotkeyMachine({ holdSupported, onStart, onStop, onCancel, now = D
     },
     press() {
       if (state === "idle") {
-        const hold = typeof holdSupported === "function" ? holdSupported() : holdSupported;
-        state = hold ? "holding" : "toggled";
+        state = valor(holdSupported) ? "holding" : "toggled";
         pressedAt = now();
         onStart();
       } else if (state === "toggled") {
@@ -32,8 +44,11 @@ function createHotkeyMachine({ holdSupported, onStart, onStop, onCancel, now = D
       if (now() - pressedAt >= HOLD_MS) {
         state = "idle";
         onStop();
-      } else {
+      } else if (valor(tapToggles)) {
         state = "toggled";
+      } else {
+        state = "idle";
+        onCancel();
       }
     },
     escape() {

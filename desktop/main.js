@@ -15,14 +15,21 @@ const {
   shell,
   systemPreferences,
 } = require("electron");
+const fs = require("fs");
 const path = require("path");
 const { execFile } = require("child_process");
 const { createHotkeyMachine } = require("./hotkey");
+const {
+  MODIFICADORES_SOZINHOS,
+  ehModificadorSozinho,
+  padraoDoSistema,
+  rotuloDoAtalho,
+  validarAtalho,
+} = require("./atalhos");
 
 const BASE = (process.env.EAGLE_FLOW_URL || "https://eye.autoeaglemidia.com").replace(/\/$/, "");
 const APP_URL = `${BASE}/eagle-flow-app`;
 const PILL_URL = `${BASE}/eagle-flow-app/pill`;
-const ATALHO = "Alt+Space";
 const isMac = process.platform === "darwin";
 
 let mainWin = null;
@@ -30,6 +37,30 @@ let pillWin = null;
 let tray = null;
 let uio = null; // uiohook-napi: soltar a tecla, Esc e o Cmd/Ctrl+V
 let uioRodando = false;
+
+// ── Configuração (atalho escolhido) ────────────────────────────────────────
+
+function arquivoConfig() {
+  return path.join(app.getPath("userData"), "config.json");
+}
+
+function lerConfig() {
+  try {
+    return JSON.parse(fs.readFileSync(arquivoConfig(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+function salvarConfig(config) {
+  try {
+    fs.writeFileSync(arquivoConfig(), JSON.stringify(config));
+  } catch (err) {
+    console.error("[EagleFlow] não deu pra salvar a configuração:", err?.message);
+  }
+}
+
+let atalhoAtual = padraoDoSistema(process.platform);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -139,6 +170,7 @@ function enviarPilula(canal) {
 
 const atalho = createHotkeyMachine({
   holdSupported: () => uioRodando,
+  tapToggles: () => !ehModificadorSozinho(atalhoAtual),
   onStart: () => {
     posicionarPilula();
     pillWin.showInactive();
@@ -154,18 +186,65 @@ function iniciarLeitorDeTeclas() {
   try {
     uio = uio || require("uiohook-napi");
     const { uIOhook, UiohookKey } = uio;
-    const soltar = new Set([UiohookKey.Space, UiohookKey.Alt, UiohookKey.AltRight]);
-    uIOhook.on("keyup", (e) => {
-      if (soltar.has(e.keycode)) atalho.release();
-    });
+    const teclaSozinha = () =>
+      ehModificadorSozinho(atalhoAtual)
+        ? UiohookKey[MODIFICADORES_SOZINHOS[atalhoAtual].uiohook]
+        : null;
     uIOhook.on("keydown", (e) => {
-      if (e.keycode === UiohookKey.Escape) atalho.escape();
+      if (e.keycode === UiohookKey.Escape) return atalho.escape();
+      const sozinha = teclaSozinha();
+      if (sozinha === null) return;
+      if (e.keycode === sozinha) atalho.press();
+      // Outra tecla junto do modificador: a pessoa está usando um atalho de
+      // outro app (ex.: Option + letra pra acento), não ditando.
+      else if (atalho.state === "holding") atalho.escape();
+    });
+    uIOhook.on("keyup", (e) => {
+      const sozinha = teclaSozinha();
+      // Combinação: soltar qualquer tecla dela termina; modificador: só ele.
+      if (sozinha === null || e.keycode === sozinha) atalho.release();
     });
     uIOhook.start();
     uioRodando = true;
   } catch (err) {
     console.error("[EagleFlow] leitor de teclas indisponível:", err?.message);
   }
+}
+
+function registrarAtalho(novo) {
+  globalShortcut.unregisterAll();
+  if (ehModificadorSozinho(novo)) return true;
+  try {
+    // No Windows a tecla Windows se chama "Super" pro Electron.
+    const acc = isMac ? novo : novo.replace(/\bCommand\b/, "Super");
+    return globalShortcut.register(acc, () => atalho.press());
+  } catch {
+    return false;
+  }
+}
+
+function aplicarAtalho(novo) {
+  const v = validarAtalho(novo);
+  if (!v.ok) return v;
+  const anterior = atalhoAtual;
+  atalho.escape();
+  if (!registrarAtalho(novo)) {
+    registrarAtalho(anterior);
+    return { ok: false, erro: "Esse atalho já é usado por outro app. Escolha outro." };
+  }
+  atalhoAtual = novo;
+  salvarConfig({ ...lerConfig(), atalho: novo });
+  tray?.setToolTip(`Eagle Flow: segure ${rotuloDoAtalho(novo, process.platform)} e fale`);
+  return { ok: true };
+}
+
+function infoAtalho() {
+  return {
+    atalho: atalhoAtual,
+    rotulo: rotuloDoAtalho(atalhoAtual, process.platform),
+    // Modificador sozinho só funciona com o leitor de teclas ligado.
+    pronto: !ehModificadorSozinho(atalhoAtual) || uioRodando,
+  };
 }
 
 // ── Colar ──────────────────────────────────────────────────────────────────
@@ -246,7 +325,9 @@ async function pedirPermissoes() {
 ipcMain.on("ef:version", (e) => {
   e.returnValue = app.getVersion();
 });
-ipcMain.handle("ef:paste", (e, texto) => (remetenteValido(e) ? colar(String(texto)) : { ok: false }));
+ipcMain.handle("ef:paste", (e, texto) =>
+  remetenteValido(e) ? colar(String(texto)) : { ok: false }
+);
 ipcMain.on("ef:state", (e, estado) => {
   if (!remetenteValido(e) || !pillWin) return;
   if (estado === "idle") pillWin.hide();
@@ -259,6 +340,10 @@ ipcMain.on("ef:open-main", (e) => {
   if (remetenteValido(e)) abrirPrincipal();
 });
 ipcMain.handle("ef:permissoes", (e) => (remetenteValido(e) ? permissoes() : null));
+ipcMain.handle("ef:get-atalho", (e) => (remetenteValido(e) ? infoAtalho() : null));
+ipcMain.handle("ef:set-atalho", (e, novo) =>
+  remetenteValido(e) ? aplicarAtalho(String(novo)) : { ok: false }
+);
 ipcMain.handle("ef:pedir-permissoes", async (e) => {
   if (remetenteValido(e)) await pedirPermissoes();
 });
@@ -271,7 +356,7 @@ function criarBandeja() {
     .resize({ width: 18, height: 18 });
   if (isMac) icone.setTemplateImage(true);
   tray = new Tray(icone);
-  tray.setToolTip(`Eagle Flow: segure ${isMac ? "Option" : "Alt"}+Espaço e fale`);
+  tray.setToolTip(`Eagle Flow: segure ${rotuloDoAtalho(atalhoAtual, process.platform)} e fale`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Abrir Eagle Flow", click: abrirPrincipal },
@@ -295,12 +380,20 @@ app.whenReady().then(() => {
 
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
 
+  const salvo = lerConfig().atalho;
+  if (salvo && validarAtalho(salvo).ok) atalhoAtual = salvo;
+
+  // Pede o microfone uma vez já na abertura (no Mac, o pedido sai do motor).
+  if (isMac && systemPreferences.getMediaAccessStatus("microphone") === "not-determined") {
+    void systemPreferences.askForMediaAccess("microphone");
+  }
+
   criarBandeja();
   criarPilula();
   abrirPrincipal();
 
-  if (!globalShortcut.register(ATALHO, () => atalho.press())) {
-    console.error("[EagleFlow] não deu pra registrar", ATALHO);
+  if (!registrarAtalho(atalhoAtual)) {
+    console.error("[EagleFlow] não deu pra registrar", atalhoAtual);
   }
   iniciarLeitorDeTeclas();
   // No Mac o leitor só liga depois de liberar Acessibilidade.

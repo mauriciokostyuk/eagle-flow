@@ -53,3 +53,21 @@ test("sem leitor de teclas tudo vira toque", () => {
   m.press();
   assert.deepEqual(events, ["start", "stop"]);
 });
+
+test("modificador sozinho: toque rápido cancela em vez de ligar", () => {
+  let t = 0;
+  const events = [];
+  const m = createHotkeyMachine({
+    holdSupported: true,
+    tapToggles: () => false,
+    now: () => t,
+    onStart: () => events.push("start"),
+    onStop: () => events.push("stop"),
+    onCancel: () => events.push("cancel"),
+  });
+  m.press();
+  t += 100;
+  m.release();
+  assert.deepEqual(events, ["start", "cancel"]);
+  assert.equal(m.state, "idle");
+});
