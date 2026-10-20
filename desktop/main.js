@@ -19,6 +19,7 @@ const fs = require("fs");
 const path = require("path");
 const { execFile, spawn } = require("child_process");
 const { createHotkeyMachine } = require("./hotkey");
+const { iniciarAtualizador } = require("./atualizador");
 const {
   MODIFICADORES_SOZINHOS,
   ehFn,
@@ -468,6 +469,11 @@ app.whenReady().then(async () => {
   }
   iniciarLeitorDeTeclas();
   // No Mac o leitor só liga depois de liberar Acessibilidade.
+  // Motor se atualiza sozinho (só com o ditado parado).
+  iniciarAtualizador({
+    podeAtualizar: () => atalho.state === "idle" && !(pillWin && pillWin.isVisible()),
+  });
+
   // Também religa o leitor do Fn se ele cair.
   setInterval(() => {
     iniciarLeitorDeTeclas();
