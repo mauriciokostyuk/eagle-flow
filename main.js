@@ -21,6 +21,7 @@ const {
   dialog,
   ipcMain,
   net,
+  Notification,
   session,
   systemPreferences,
 } = require("electron");
@@ -45,9 +46,9 @@ try {
 
 const VALID_CHANNELS = new Set(["development", "staging", "production"]);
 const DEFAULT_OAUTH_PROTOCOL_BY_CHANNEL = {
-  development: "openwhispr-dev",
-  staging: "openwhispr-staging",
-  production: "openwhispr",
+  development: "eagleflow-dev",
+  staging: "eagleflow-staging",
+  production: "eagleflow",
 };
 const BASE_WINDOWS_APP_ID = "com.eaglemidiadigital.eagleflow";
 const DEFAULT_AUTH_BRIDGE_PORT = 5199;
@@ -157,6 +158,16 @@ function getOAuthProtocol() {
 }
 
 const OAUTH_PROTOCOL = getOAuthProtocol();
+const { isEagleConnectDeepLink, handleEagleConnectDeepLink } = require("./src/helpers/eagleConnect");
+
+function connectEagleFlow(url) {
+  return handleEagleConnectDeepLink(url, {
+    environmentManager,
+    BrowserWindow,
+    Notification,
+    logger: debugLogger,
+  });
+}
 
 const { registerLinuxUrlSchemeHandler } = require("./src/helpers/linuxUrlSchemeHandler");
 
@@ -762,6 +773,11 @@ app.on("open-url", (event, url) => {
   event.preventDefault();
   if (!url.startsWith(`${OAUTH_PROTOCOL}://`)) return;
 
+  if (isEagleConnectDeepLink(url, OAUTH_PROTOCOL)) {
+    connectEagleFlow(url);
+    return;
+  }
+
   if (url.includes("upgrade-success")) {
     handleUpgradeDeepLink();
     return;
@@ -1248,7 +1264,9 @@ async function startApp() {
     await handleNoteDeepLink(initialProtocolUrl);
   } else {
     if (initialProtocolUrl && process.platform !== "darwin") {
-      if (initialProtocolUrl.includes("upgrade-success")) {
+      if (isEagleConnectDeepLink(initialProtocolUrl, OAUTH_PROTOCOL)) {
+        connectEagleFlow(initialProtocolUrl);
+      } else if (initialProtocolUrl.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isInvitationDeepLink(initialProtocolUrl)) {
         handleInvitationDeepLink(initialProtocolUrl);
@@ -1985,7 +2003,9 @@ if (gotSingleInstanceLock) {
     // Check for OAuth protocol URL in command line arguments (Windows/Linux)
     const url = commandLine.find((arg) => arg.startsWith(`${OAUTH_PROTOCOL}://`));
     if (url) {
-      if (url.includes("upgrade-success")) {
+      if (isEagleConnectDeepLink(url, OAUTH_PROTOCOL)) {
+        connectEagleFlow(url);
+      } else if (url.includes("upgrade-success")) {
         handleUpgradeDeepLink();
       } else if (isNoteDeepLink(url)) {
         await handleNoteDeepLink(url);

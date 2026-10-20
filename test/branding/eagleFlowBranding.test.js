@@ -21,7 +21,7 @@ test("electron-builder branding", () => {
 test("package.json branding", () => {
   const pkg = JSON.parse(read("package.json"));
   assert.strictEqual(pkg.name, "eagle-flow");
-  assert.strictEqual(pkg.version, "1.0.0");
+  assert.strictEqual(pkg.version, "1.0.1");
 });
 
 test("css primary color and html title", () => {

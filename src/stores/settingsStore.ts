@@ -69,7 +69,7 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
-const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "groq";
+const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "custom";
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
@@ -1516,10 +1516,11 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionProvider",
     DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
   ),
-  cloudTranscriptionModel: readString("cloudTranscriptionModel", "whisper-large-v3-turbo"),
+  cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
-    "https://api.groq.com/openai/v1"
+    // Proxy do Eagle Eye: a chave da OpenAI fica no servidor (ver eagleConnect.js).
+    "https://eye.autoeaglemidia.com/api/eagle-flow/v1"
   ),
   transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
   reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
