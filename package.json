@@ -1,7 +1,7 @@
 {
-  "name": "open-whispr",
-  "version": "1.10.3",
-  "description": "A desktop dictation application using whisper.cpp for speech-to-text transcription",
+  "name": "eagle-flow",
+  "version": "1.0.0",
+  "description": "Eagle Flow - ditado por voz para desktop com Groq Whisper e whisper.cpp",
   "main": "main.js",
   "private": true,
   "engines": {
@@ -91,7 +91,7 @@
     "desktop-app"
   ],
   "author": {
-    "name": "OpenWhispr Team",
+    "name": "Eagle Flow Team",
     "email": "support@openwhispr.com"
   },
   "license": "MIT",

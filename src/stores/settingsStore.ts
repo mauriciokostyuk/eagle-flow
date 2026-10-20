@@ -69,7 +69,7 @@ let _ReasoningService: typeof import("../services/ReasoningService").default | n
 // store with partial window stubs that don't define it.
 const isBrowser = typeof window !== "undefined" && typeof localStorage !== "undefined";
 
-const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "openai";
+const DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER = "groq";
 
 export const TRANSCRIPTION_POLICY_PROVIDER_IDS = [
   ...modelRegistryData.transcriptionProviders.map((provider) => provider.id),
@@ -1506,9 +1506,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   parakeetModel: readString("parakeetModel", ""),
   cohereModel: readString("cohereModel", DEFAULT_COHERE_MODEL),
   allowOpenAIFallback: readBoolean("allowOpenAIFallback", false),
-  allowLocalFallback: readBoolean("allowLocalFallback", false),
+  allowLocalFallback: readBoolean("allowLocalFallback", true),
   fallbackWhisperModel: readString("fallbackWhisperModel", "base"),
-  preferredLanguage: readString("preferredLanguage", "auto"),
+  preferredLanguage: readString("preferredLanguage", "pt"),
   chineseScriptPreference: normalizeChineseScriptPreference(
     readString("chineseScriptPreference", "as-transcribed")
   ),
@@ -1516,16 +1516,16 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     "cloudTranscriptionProvider",
     DEFAULT_CLOUD_TRANSCRIPTION_PROVIDER
   ),
-  cloudTranscriptionModel: readString("cloudTranscriptionModel", "gpt-4o-mini-transcribe"),
+  cloudTranscriptionModel: readString("cloudTranscriptionModel", "whisper-large-v3-turbo"),
   cloudTranscriptionBaseUrl: readString(
     "cloudTranscriptionBaseUrl",
-    API_ENDPOINTS.TRANSCRIPTION_BASE
+    "https://api.groq.com/openai/v1"
   ),
   transcriptionModelByProvider: readModelMemory("transcriptionModelByProvider"),
   reasoningModelByProvider: readModelMemory("reasoningModelByProvider"),
   // Secrets aren't hydrated yet at construction; the BYOK default is set
   // post-hydration in initializeSettings.
-  cloudTranscriptionMode: readString("cloudTranscriptionMode", "openwhispr"),
+  cloudTranscriptionMode: readString("cloudTranscriptionMode", "byok"),
   cleanupCloudMode: readString("cleanupCloudMode", "openwhispr"),
   cleanupCloudBaseUrl: readString("cleanupCloudBaseUrl", API_ENDPOINTS.OPENAI_BASE),
   cortiEnvironment: readString("cortiEnvironment", "us"),
@@ -1601,7 +1601,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   meetingHotkeyLayoutMode: (readString("meetingHotkeyLayoutMode", "full-width") === "side-panel"
     ? "side-panel"
     : "full-width") as "side-panel" | "full-width",
-  activationMode: (readString("activationMode", "tap") === "push" ? "push" : "tap") as
+  activationMode: (readString("activationMode", "push") === "tap" ? "tap" : "push") as
     "tap" | "push",
 
   microphoneSelectionMode: (() => {
@@ -1706,9 +1706,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   isSignedIn: readBoolean("isSignedIn", false),
 
   transcriptionMode: (() => {
-    const v = readString("transcriptionMode", "openwhispr");
+    const v = readString("transcriptionMode", "providers");
     if (v === "openwhispr" || v === "providers" || v === "local" || v === "self-hosted") return v;
-    return "openwhispr" as InferenceMode;
+    return "providers" as InferenceMode;
   })(),
   remoteTranscriptionType: (() => {
     const v = readString("remoteTranscriptionType", "lan");

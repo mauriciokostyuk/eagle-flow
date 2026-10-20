@@ -1,13 +1,13 @@
 {
-  "appId": "com.gizmolabs.openwhispr",
+  "appId": "com.eaglemidiadigital.eagleflow",
   "afterPack": "scripts/afterPack.js",
   "extraMetadata": {
     "windowsTrayIdentity": true
   },
-  "productName": "OpenWhispr",
+  "productName": "Eagle Flow",
   "protocols": {
-    "name": "OpenWhispr Protocol",
-    "schemes": ["openwhispr"]
+    "name": "Eagle Flow Protocol",
+    "schemes": ["eagleflow"]
   },
   "directories": {
     "output": "dist"
@@ -154,13 +154,14 @@
   "mac": {
     "category": "public.app-category.productivity",
     "target": ["dmg", "zip"],
+    "artifactName": "EagleFlow-mac-${arch}.${ext}",
     "icon": "src/assets/icon.icns",
     "gatekeeperAssess": false,
     "hardenedRuntime": true,
     "entitlements": "resources/mac/entitlements.mac.plist",
     "entitlementsInherit": "resources/mac/entitlements.mac.plist",
-    "identity": "Gizmo Labs Inc. (T832773L2J)",
-    "notarize": true,
+    "identity": "-",
+    "notarize": false,
     "extraResources": [
       {
         "from": "src/assets/Assets.car",
@@ -169,16 +170,17 @@
     ],
     "extendInfo": {
       "LSUIElement": false,
-      "CFBundleIconName": "openwhispr",
-      "NSMicrophoneUsageDescription": "OpenWhispr uses the microphone to capture your voice for transcription.",
-      "NSAudioCaptureUsageDescription": "OpenWhispr uses system audio to capture other participants' audio from calls and meetings.",
-      "NSAccessibilityUsageDescription": "OpenWhispr needs accessibility permissions to paste transcribed text into other applications.",
-      "NSCalendarsUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events.",
-      "NSCalendarsFullAccessUsageDescription": "OpenWhispr reads your calendar to detect upcoming meetings and link meeting notes to events."
+      "CFBundleIconName": "eagleflow",
+      "NSMicrophoneUsageDescription": "Eagle Flow uses the microphone to capture your voice for transcription.",
+      "NSAudioCaptureUsageDescription": "Eagle Flow uses system audio to capture other participants' audio from calls and meetings.",
+      "NSAccessibilityUsageDescription": "Eagle Flow needs accessibility permissions to paste transcribed text into other applications.",
+      "NSCalendarsUsageDescription": "Eagle Flow reads your calendar to detect upcoming meetings and link meeting notes to events.",
+      "NSCalendarsFullAccessUsageDescription": "Eagle Flow reads your calendar to detect upcoming meetings and link meeting notes to events."
     }
   },
   "win": {
     "target": ["nsis"],
+    "artifactName": "EagleFlow-windows-setup.${ext}",
     "icon": "src/assets/icon.ico",
     "forceCodeSigning": true,
     "azureSignOptions": {
@@ -268,7 +270,7 @@
     "include": "resources/nsis/installer.nsh"
   },
   "dmg": {
-    "title": "OpenWhispr",
+    "title": "Eagle Flow",
     "icon": "src/assets/icon.icns",
     "window": {
       "width": 540,
@@ -277,9 +279,9 @@
   },
   "publish": {
     "provider": "github",
-    "owner": "OpenWhispr",
-    "repo": "openwhispr",
+    "owner": "mauriciokostyuk",
+    "repo": "eagle-flow",
     "private": false,
-    "releaseType": "draft"
+    "releaseType": "release"
   }
 }

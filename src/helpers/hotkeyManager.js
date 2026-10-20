@@ -14,7 +14,7 @@ const HOTKEY_REGISTRATION_DELAY_MS = 1000;
 const FALLBACK_HOTKEYS = ["F8", "F9", "Control+Shift+Space"];
 
 // Default hotkey for dictation if no saved value exists
-const DEFAULT_HOTKEY = "Control+Super";
+const DEFAULT_HOTKEY = process.platform === "linux" ? "Control+Super" : "Alt+Space";
 
 // Dictation has a dedicated native path because it also supports push-to-talk.
 const LINUX_NATIVE_TAP_SLOTS = new Set(["meeting", "voiceAgent", "translation"]);
@@ -107,7 +107,7 @@ class HotkeyManager extends EventEmitter {
     // Each slot holds a list of hotkeys (#936). `accelerators` mirrors `hotkeys`
     // index-for-index (null for native-listener entries).
     this.slots = new Map();
-    const defaultDictation = process.platform === "darwin" ? "GLOBE" : "Control+Super";
+    const defaultDictation = DEFAULT_HOTKEY;
     this.slots.set("dictation", { hotkeys: [defaultDictation], callback: null, accelerators: [] });
     this.isInitialized = false;
     this.isListeningMode = false;
@@ -1407,7 +1407,7 @@ class HotkeyManager extends EventEmitter {
    * first fallback (F8).
    */
   getEffectiveDefaultHotkey() {
-    if (process.platform === "darwin") return "GLOBE";
+    if (process.platform === "darwin") return DEFAULT_HOTKEY;
     if (this._isWindowsKeyListenerMissing()) return FALLBACK_HOTKEYS[0];
     if (process.platform !== "linux") return DEFAULT_HOTKEY;
 
