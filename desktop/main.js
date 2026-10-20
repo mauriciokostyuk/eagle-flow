@@ -122,6 +122,8 @@ function abrirPrincipal() {
     webPreferences: webPrefs,
   });
   protegerNavegacao(mainWin);
+  // A página é do Eagle Eye; a janela continua se chamando Eagle Flow.
+  mainWin.on("page-title-updated", (e) => e.preventDefault());
   mainWin.webContents.on("did-fail-load", (_e, code, _desc, url, isMainFrame) => {
     if (isMainFrame && code !== -3) {
       mainWin.loadFile(path.join(__dirname, "offline.html"), { query: { url: APP_URL } });

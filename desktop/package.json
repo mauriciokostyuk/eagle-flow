@@ -52,7 +52,7 @@
       "hardenedRuntime": false,
       "category": "public.app-category.productivity",
       "extendInfo": {
-        "LSUIElement": true,
+        "LSUIElement": false,
         "NSMicrophoneUsageDescription": "O Eagle Flow usa o microfone para transcrever o que você fala."
       },
       "extraResources": [
