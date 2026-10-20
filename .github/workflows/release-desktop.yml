@@ -50,6 +50,22 @@ jobs:
           node-version: "24"
       - run: npm ci
       - run: node scripts/build-globe.js ${{ matrix.arch }}
+      - name: Importar o certificado da Eagle (permissões não resetam a cada versão)
+        env:
+          P12: ${{ secrets.MAC_CERT_P12 }}
+          SENHA: ${{ secrets.MAC_CERT_PASSWORD }}
+        run: |
+          if [ -z "$P12" ]; then echo "sem certificado, fica ad-hoc"; exit 0; fi
+          KC="$RUNNER_TEMP/eagleflow.keychain-db"
+          security create-keychain -p ci "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p ci "$KC"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KC" -P "$SENHA" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci "$KC"
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "EF_SIGN_IDENTITY=Eagle Flow Eagle Midia" >> "$GITHUB_ENV"
       - run: npx electron-builder --mac --${{ matrix.arch }} --publish always
         env:
           GH_TOKEN: ${{ github.token }}

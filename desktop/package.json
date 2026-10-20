@@ -81,6 +81,7 @@
       "owner": "mauriciokostyuk",
       "repo": "eagle-flow",
       "releaseType": "release"
-    }
+    },
+    "afterSign": "scripts/assinar.js"
   }
 }

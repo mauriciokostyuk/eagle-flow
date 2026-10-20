@@ -433,6 +433,8 @@ function criarBandeja() {
 }
 
 app.on("second-instance", abrirPrincipal);
+// Clique no ícone do Dock reabre a janela.
+app.on("activate", abrirPrincipal);
 
 app.whenReady().then(async () => {
   // A tela vem do Eagle Eye, que é um PWA com cache próprio. Limpa esse cache
