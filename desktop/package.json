@@ -1,7 +1,7 @@
 {
   "name": "eagle-flow-desktop",
   "productName": "Eagle Flow",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Eagle Flow: motor de ditado por voz. Tela e regras vêm do Eagle Eye.",
   "main": "main.js",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist:mac": "node scripts/build-globe.js && electron-builder --mac --publish always",
+    "dist:mac": "node scripts/build-nativos.js && electron-builder --mac --publish always",
     "dist:win": "electron-builder --win --publish always"
   },
   "dependencies": {
@@ -35,6 +35,7 @@
       "atalhos.js",
       "versao.js",
       "atualizador.js",
+      "reuniao.js",
       "offline.html",
       "build/trayTemplate@3x.png",
       "build/icon.png",
@@ -56,12 +57,21 @@
       "category": "public.app-category.productivity",
       "extendInfo": {
         "LSUIElement": false,
-        "NSMicrophoneUsageDescription": "O Eagle Flow usa o microfone para transcrever o que você fala."
+        "NSMicrophoneUsageDescription": "O Eagle Flow usa o microfone para transcrever o que você fala.",
+        "NSAudioCaptureUsageDescription": "O Eagle Flow grava o áudio das reuniões para transcrever o que os outros falam."
       },
       "extraResources": [
         {
           "from": "build/bin/globe-listener",
           "to": "bin/globe-listener"
+        },
+        {
+          "from": "build/bin/audio-tap",
+          "to": "bin/audio-tap"
+        },
+        {
+          "from": "build/bin/mic-listener",
+          "to": "bin/mic-listener"
         }
       ]
     },

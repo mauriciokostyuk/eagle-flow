@@ -7,9 +7,11 @@ const {
   Menu,
   Tray,
   clipboard,
+  desktopCapturer,
   globalShortcut,
   ipcMain,
   nativeImage,
+  Notification,
   screen,
   session,
   shell,
@@ -28,6 +30,12 @@ const {
   rotuloDoAtalho,
   validarAtalho,
 } = require("./atalhos");
+const {
+  appDeReuniaoAberto,
+  criarAudioDoSistemaMac,
+  criarDetectorDeReuniao,
+  criarDetectorPorProcesso,
+} = require("./reuniao");
 
 const BASE = (process.env.EAGLE_FLOW_URL || "https://eye.autoeaglemidia.com").replace(/\/$/, "");
 const APP_URL = `${BASE}/eagle-flow-app`;
@@ -39,6 +47,7 @@ let pillWin = null;
 let tray = null;
 let uio = null; // uiohook-napi: soltar a tecla, Esc e o Cmd/Ctrl+V
 let uioRodando = false;
+let gravandoReuniao = false;
 
 // ── Configuração (atalho escolhido) ────────────────────────────────────────
 
@@ -87,6 +96,8 @@ const webPrefs = {
   contextIsolation: true,
   sandbox: true,
   nodeIntegration: false,
+  // A gravação de reunião continua com a janela escondida.
+  backgroundThrottling: false,
 };
 
 function carregar(win, url) {
@@ -106,10 +117,12 @@ function protegerNavegacao(win) {
   });
 }
 
-function abrirPrincipal() {
+function abrirPrincipal({ focar = true } = {}) {
   if (mainWin && !mainWin.isDestroyed()) {
-    mainWin.show();
-    mainWin.focus();
+    if (focar) {
+      mainWin.show();
+      mainWin.focus();
+    } else if (!mainWin.isVisible()) mainWin.showInactive();
     return;
   }
   mainWin = new BrowserWindow({
@@ -130,7 +143,14 @@ function abrirPrincipal() {
       mainWin.loadFile(path.join(__dirname, "offline.html"), { query: { url: APP_URL } });
     }
   });
-  mainWin.once("ready-to-show", () => mainWin.show());
+  // Fechar no meio de uma reunião só esconde: a gravação continua.
+  mainWin.on("close", (e) => {
+    if (gravandoReuniao) {
+      e.preventDefault();
+      mainWin.hide();
+    }
+  });
+  mainWin.once("ready-to-show", () => (focar ? mainWin.show() : mainWin.showInactive()));
   carregar(mainWin, APP_URL);
 }
 
@@ -387,6 +407,111 @@ async function pedirPermissoes() {
   }
 }
 
+// ── Reuniões ───────────────────────────────────────────────────────────────
+
+function caminhoBin(nome) {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "bin", nome)
+    : path.join(__dirname, "build", "bin", nome);
+}
+
+const audioDoSistema = isMac ? criarAudioDoSistemaMac(caminhoBin("audio-tap")) : null;
+let micListener = null;
+let detector = null;
+
+function nossosPids() {
+  return new Set([process.pid, ...app.getAppMetrics().map((m) => m.pid)]);
+}
+
+function avisarJanela(canal) {
+  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.send(canal);
+}
+
+function reuniaoDetectada() {
+  if (gravandoReuniao) return;
+  abrirPrincipal({ focar: false });
+  // A tela pode ainda estar carregando: avisa de novo quando terminar.
+  setTimeout(() => avisarJanela("ef:reuniao-sugerida"), 1500);
+  avisarJanela("ef:reuniao-sugerida");
+  if (Notification.isSupported()) {
+    const n = new Notification({
+      title: "Reunião detectada",
+      body: "Clique para transcrever com o Eagle Flow.",
+      silent: true,
+    });
+    n.on("click", () => {
+      abrirPrincipal();
+      avisarJanela("ef:reuniao-sugerida");
+    });
+    n.show();
+  }
+}
+
+function reuniaoAcabou() {
+  avisarJanela("ef:reuniao-acabou");
+}
+
+function iniciarDetectorDeReuniao() {
+  if (isMac) {
+    const bin = caminhoBin("mic-listener");
+    if (!fs.existsSync(bin)) return;
+    detector = criarDetectorDeReuniao({
+      ehNosso: (pid) => nossosPids().has(pid),
+      appDeReuniaoAberto,
+      onSugerir: reuniaoDetectada,
+      onAcabou: reuniaoAcabou,
+    });
+    const ligar = () => {
+      micListener = spawn(bin, [], { stdio: ["ignore", "pipe", "ignore"] });
+      let resto = "";
+      micListener.stdout.on("data", (d) => {
+        resto += d;
+        let i;
+        while ((i = resto.indexOf("\n")) >= 0) {
+          detector.linha(resto.slice(0, i));
+          resto = resto.slice(i + 1);
+        }
+      });
+      micListener.on("error", () => {});
+      micListener.on("exit", () => {
+        micListener = null;
+        if (!app.isQuitting) setTimeout(ligar, 10_000);
+      });
+    };
+    ligar();
+  } else if (process.platform === "win32") {
+    detector = criarDetectorPorProcesso({
+      appDeReuniaoAberto,
+      onSugerir: reuniaoDetectada,
+      onAcabou: reuniaoAcabou,
+    });
+  }
+  if (detector) setInterval(() => void detector.tick().catch(() => {}), 5000);
+}
+
+ipcMain.handle("ef:reuniao-estado", (e, gravando) => {
+  if (remetenteValido(e)) gravandoReuniao = Boolean(gravando);
+});
+ipcMain.handle("ef:sistema-iniciar", async (e) => {
+  if (!remetenteValido(e)) return { ok: false };
+  // Windows: o áudio do computador vem pela tela (loopback) direto na página.
+  if (!isMac) return { ok: true, modo: "pagina" };
+  if (!fs.existsSync(caminhoBin("audio-tap"))) return { ok: false, motivo: "unsupported_os" };
+  const r = await audioDoSistema.iniciar();
+  if (!r.ok && r.motivo === "permission_denied") {
+    void shell.openExternal(
+      "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture"
+    );
+  }
+  return { ...r, modo: "motor" };
+});
+ipcMain.handle("ef:sistema-fatia", (e) =>
+  remetenteValido(e) && audioDoSistema ? audioDoSistema.fatia() : null
+);
+ipcMain.handle("ef:sistema-parar", async (e) =>
+  remetenteValido(e) && audioDoSistema ? audioDoSistema.parar() : null
+);
+
 // ── IPC ────────────────────────────────────────────────────────────────────
 
 ipcMain.on("ef:version", (e) => {
@@ -448,8 +573,18 @@ app.whenReady().then(async () => {
 
   // Microfone só para o Eagle Eye.
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
-    cb(permission === "media" && deEagleEye(wc.getURL()));
+    cb((permission === "media" || permission === "display-capture") && deEagleEye(wc.getURL()));
   });
+  // Windows: áudio do computador para gravar reunião. Só o som é usado.
+  if (process.platform === "win32") {
+    session.defaultSession.setDisplayMediaRequestHandler((req, callback) => {
+      if (!deEagleEye(req.frame?.url || "")) return callback(null);
+      desktopCapturer
+        .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
+        .then((fontes) => callback(fontes[0] ? { video: fontes[0], audio: "loopback" } : null))
+        .catch(() => callback(null));
+    });
+  }
   session.defaultSession.setPermissionCheckHandler((wc, permission, origin) => {
     return permission === "media" && deEagleEye(origin || wc?.getURL() || "");
   });
@@ -475,8 +610,11 @@ app.whenReady().then(async () => {
   // No Mac o leitor só liga depois de liberar Acessibilidade.
   // Motor se atualiza sozinho (só com o ditado parado).
   iniciarAtualizador({
-    podeAtualizar: () => atalho.state === "idle" && !(pillWin && pillWin.isVisible()),
+    podeAtualizar: () =>
+      atalho.state === "idle" && !gravandoReuniao && !(pillWin && pillWin.isVisible()),
   });
+
+  iniciarDetectorDeReuniao();
 
   // Também religa o leitor do Fn se ele cair.
   setInterval(() => {
@@ -488,8 +626,15 @@ app.whenReady().then(async () => {
 // Fechar a janela não fecha o app: ele fica na barra (bandeja).
 app.on("window-all-closed", () => {});
 
+app.on("before-quit", () => {
+  app.isQuitting = true;
+  gravandoReuniao = false;
+});
+
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  if (micListener) micListener.kill("SIGTERM");
+  if (audioDoSistema) void audioDoSistema.parar();
   pararGlobe();
   if (uioRodando) {
     try {

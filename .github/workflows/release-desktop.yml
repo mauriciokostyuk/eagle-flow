@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: "24"
       - run: npm ci
-      - run: node scripts/build-globe.js ${{ matrix.arch }}
+      - run: node scripts/build-nativos.js ${{ matrix.arch }}
       - name: Importar o certificado da Eagle (permissões não resetam a cada versão)
         env:
           P12: ${{ secrets.MAC_CERT_P12 }}

@@ -18,4 +18,11 @@ contextBridge.exposeInMainWorld("eagleFlowShell", {
   pedirPermissoes: () => ipcRenderer.invoke("ef:pedir-permissoes"),
   getAtalho: () => ipcRenderer.invoke("ef:get-atalho"),
   setAtalho: (atalho) => ipcRenderer.invoke("ef:set-atalho", String(atalho)),
+  // Reuniões (motor 2.3+)
+  onReuniaoSugerida: (cb) => on("ef:reuniao-sugerida", cb),
+  onReuniaoAcabou: (cb) => on("ef:reuniao-acabou", cb),
+  setReuniaoGravando: (gravando) => ipcRenderer.invoke("ef:reuniao-estado", Boolean(gravando)),
+  sistemaIniciar: () => ipcRenderer.invoke("ef:sistema-iniciar"),
+  sistemaFatia: () => ipcRenderer.invoke("ef:sistema-fatia"),
+  sistemaParar: () => ipcRenderer.invoke("ef:sistema-parar"),
 });
