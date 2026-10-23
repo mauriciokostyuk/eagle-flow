@@ -248,7 +248,9 @@ function iniciarGlobe() {
       "--globe-preference-state",
       path.join(app.getPath("userData"), "globe-state.json"),
     ],
-    { stdio: ["ignore", "pipe", "ignore"] }
+    // stdin precisa ficar aberto: o leitor encerra quando recebe fim de arquivo
+    // (é assim que ele percebe que o app fechou e devolve a tecla ao Mac).
+    { stdio: ["pipe", "pipe", "ignore"] }
   );
   globeRodando = true;
   let resto = "";
