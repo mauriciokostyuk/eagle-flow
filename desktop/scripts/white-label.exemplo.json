@@ -1,0 +1,10 @@
+{
+  "nome": "All Matters Construction Flow",
+  "slug": "construction-flow",
+  "appId": "ai.allmatters.constructionflow",
+  "plataforma": "All Matters AI",
+  "baseUrl": "https://app.allmatters.ai",
+  "autor": "All Matters AI",
+  "github": "SEU_USUARIO/SEU_REPO",
+  "cores": { "primaria": "#2b62d6", "fundo": "#020925", "fundo2": "#0d2662" }
+}
