@@ -25,4 +25,7 @@ contextBridge.exposeInMainWorld("eagleFlowShell", {
   sistemaIniciar: () => ipcRenderer.invoke("ef:sistema-iniciar"),
   sistemaFatia: () => ipcRenderer.invoke("ef:sistema-fatia"),
   sistemaParar: () => ipcRenderer.invoke("ef:sistema-parar"),
+  // Motor 2.3.1+: WAV do áudio do computador gravado em disco (atual ou último).
+  sistemaArquivo: () => ipcRenderer.invoke("ef:sistema-arquivo"),
+  abrirGravacoes: () => ipcRenderer.invoke("ef:abrir-gravacoes"),
 });
