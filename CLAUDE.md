@@ -1,5 +1,12 @@
 # OpenWhispr Technical Reference for AI Assistants
 
+## Regra do Mauricio (dono do repositório) — OBRIGATÓRIA
+
+- O usuário é o Mauricio, no Mac dele. Não existe "Felipe".
+- Responder SEMPRE com o mínimo de texto. Nada de explicação.
+- Toda ação pedida ao usuário vem como UM ÚNICO comando pronto pra colar no Terminal, que resolve tudo de uma vez, com o local exato onde colar. Nunca vários comandos, nunca passos.
+- Nunca pedir que ele escolha entre opções: decidir e entregar o comando.
+
 This document provides comprehensive technical details about the OpenWhispr project architecture for AI assistants working on the codebase.
 
 ## Response Style
