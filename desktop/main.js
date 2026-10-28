@@ -415,7 +415,15 @@ function caminhoBin(nome) {
     : path.join(__dirname, "build", "bin", nome);
 }
 
-const audioDoSistema = isMac ? criarAudioDoSistemaMac(caminhoBin("audio-tap")) : null;
+// Gravações de reunião ficam em disco por uns dias: se a tela ou a transcrição
+// falhar, o áudio do computador ainda está aqui.
+function pastaDasReunioes() {
+  return path.join(app.getPath("userData"), "reunioes");
+}
+
+const audioDoSistema = isMac
+  ? criarAudioDoSistemaMac(caminhoBin("audio-tap"), { pasta: pastaDasReunioes() })
+  : null;
 let micListener = null;
 let detector = null;
 
@@ -511,6 +519,19 @@ ipcMain.handle("ef:sistema-fatia", (e) =>
 ipcMain.handle("ef:sistema-parar", async (e) =>
   remetenteValido(e) && audioDoSistema ? audioDoSistema.parar() : null
 );
+ipcMain.handle("ef:sistema-arquivo", (e) =>
+  remetenteValido(e) && audioDoSistema ? audioDoSistema.arquivo : null
+);
+ipcMain.handle("ef:abrir-gravacoes", async (e) => {
+  if (!remetenteValido(e)) return;
+  await abrirGravacoes();
+});
+
+async function abrirGravacoes() {
+  const pasta = pastaDasReunioes();
+  fs.mkdirSync(pasta, { recursive: true });
+  await shell.openPath(pasta);
+}
 
 // ── IPC ────────────────────────────────────────────────────────────────────
 
@@ -552,6 +573,7 @@ function criarBandeja() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: "Abrir Eagle Flow", click: abrirPrincipal },
+      { label: "Gravações de reunião…", click: () => void abrirGravacoes() },
       { type: "separator" },
       { label: "Sair", click: () => app.quit() },
     ])
