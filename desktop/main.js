@@ -36,6 +36,7 @@ const {
   criarDetectorDeReuniao,
   criarDetectorPorProcesso,
 } = require("./reuniao");
+const { criarCofre } = require("./cofre");
 
 const BASE = (process.env.EAGLE_FLOW_URL || "https://eye.autoeaglemidia.com").replace(/\/$/, "");
 const APP_URL = `${BASE}/eagle-flow-app`;
@@ -427,6 +428,121 @@ const audioDoSistema = isMac
 let micListener = null;
 let detector = null;
 
+// ── Cofre da reunião ───────────────────────────────────────────────────────
+// A tela do Eagle Eye grava o microfone e monta a transcrição. Se ela cair,
+// recarregar ou perder a internet no fim da reunião, isso ia junto. Então o
+// motor grava a sua voz por conta própria (janela escondida, gravador.html) e
+// salva o texto da tela de 15 em 15 s, tudo em userData/reunioes/.
+const cofre = criarCofre({ pasta: pastaDasReunioes() });
+let gravadorWin = null;
+
+function ehGravador(wcOuFrame) {
+  if (!gravadorWin || gravadorWin.isDestroyed()) return false;
+  const wc = gravadorWin.webContents;
+  if (!wcOuFrame) return false;
+  if (wcOuFrame.id !== undefined && wcOuFrame.id === wc.id) return true;
+  return typeof wcOuFrame.url === "string" && wcOuFrame.url === wc.getURL();
+}
+
+function avisar(title, body, aoClicar) {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body, silent: true });
+  if (aoClicar) n.on("click", aoClicar);
+  n.show();
+}
+
+function abrirGravador() {
+  if (gravadorWin && !gravadorWin.isDestroyed()) return;
+  gravadorWin = new BrowserWindow({
+    show: false,
+    width: 1,
+    height: 1,
+    webPreferences: {
+      preload: path.join(__dirname, "gravador-preload.js"),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+    },
+  });
+  gravadorWin.webContents.on("render-process-gone", () => {
+    console.error("[EagleFlow] gravador caiu");
+    fecharGravador();
+    // Caiu no meio da reunião: volta.
+    if (cofre.gravando) setTimeout(abrirGravador, 1000);
+  });
+  gravadorWin.loadFile(path.join(__dirname, "gravador.html")).catch((e) => {
+    console.error("[EagleFlow] gravador não abriu:", e?.message);
+  });
+}
+
+function fecharGravador() {
+  const w = gravadorWin;
+  gravadorWin = null;
+  if (!w || w.isDestroyed()) return;
+  try {
+    w.webContents.send("ef:gravador-parar");
+  } catch {
+    // já era
+  }
+  setTimeout(() => {
+    if (!w.isDestroyed()) w.destroy();
+  }, 500);
+}
+
+function iniciarCofre() {
+  if (cofre.gravando) return;
+  cofre.iniciar();
+  if (isMac && systemPreferences.getMediaAccessStatus("microphone") !== "granted") {
+    console.error("[EagleFlow] microfone sem permissão na hora da reunião");
+    avisar(
+      "Microfone bloqueado",
+      "O Eagle Flow não tem permissão de microfone. Clique para liberar, senão a reunião grava sem a sua voz.",
+      () => void pedirPermissoes()
+    );
+  }
+  abrirGravador();
+}
+
+function pararCofre({ avisarFim = true } = {}) {
+  if (!cofre.gravando) return [];
+  fecharGravador();
+  const arquivos = cofre.parar();
+  if (avisarFim && arquivos.length) {
+    avisar(
+      "Reunião guardada no computador",
+      "Áudio e texto ficam salvos por 7 dias. Clique para ver os arquivos.",
+      () => void abrirGravacoes()
+    );
+  }
+  return arquivos;
+}
+
+ipcMain.on("ef:gravador-pcm", (e, fonte, bytes) => {
+  if (!ehGravador(e.sender) || !cofre.gravando) return;
+  if (fonte === "microfone") cofre.microfone(Buffer.from(bytes));
+  // Windows: o áudio do computador também vem por aqui (no Mac é o audio-tap).
+  else if (fonte === "sistema" && !isMac) cofre.sistema(Buffer.from(bytes));
+});
+ipcMain.on("ef:gravador-aviso", (e, fonte, texto) => {
+  if (!ehGravador(e.sender)) return;
+  console.log(`[EagleFlow] gravador ${fonte}: ${texto}`);
+  if (fonte === "microfone" && texto.startsWith("erro:")) {
+    avisar(
+      "Não deu pra gravar o microfone",
+      "A reunião segue pela tela, mas sem cópia da sua voz no computador. Clique para conferir a permissão.",
+      () => void pedirPermissoes()
+    );
+  }
+});
+// Texto visível da tela da reunião, mandado pelo preload a cada 15 s.
+ipcMain.on("ef:tela-texto", (e, texto) => {
+  if (remetenteValido(e) && cofre.gravando) cofre.tela(texto);
+});
+ipcMain.handle("ef:salvar-transcricao", (e, texto) =>
+  remetenteValido(e) ? cofre.transcricao(texto) : false
+);
+
 function nossosPids() {
   return new Set([process.pid, ...app.getAppMetrics().map((m) => m.pid)]);
 }
@@ -498,7 +614,10 @@ function iniciarDetectorDeReuniao() {
 }
 
 ipcMain.handle("ef:reuniao-estado", (e, gravando) => {
-  if (remetenteValido(e)) gravandoReuniao = Boolean(gravando);
+  if (!remetenteValido(e)) return;
+  gravandoReuniao = Boolean(gravando);
+  if (gravandoReuniao) iniciarCofre();
+  else pararCofre();
 });
 ipcMain.handle("ef:sistema-iniciar", async (e) => {
   if (!remetenteValido(e)) return { ok: false };
@@ -595,12 +714,15 @@ app.whenReady().then(async () => {
 
   // Microfone só para o Eagle Eye.
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb) => {
-    cb((permission === "media" || permission === "display-capture") && deEagleEye(wc.getURL()));
+    cb(
+      (permission === "media" || permission === "display-capture") &&
+        (deEagleEye(wc.getURL()) || ehGravador(wc))
+    );
   });
   // Windows: áudio do computador para gravar reunião. Só o som é usado.
   if (process.platform === "win32") {
     session.defaultSession.setDisplayMediaRequestHandler((req, callback) => {
-      if (!deEagleEye(req.frame?.url || "")) return callback(null);
+      if (!deEagleEye(req.frame?.url || "") && !ehGravador(req.frame)) return callback(null);
       desktopCapturer
         .getSources({ types: ["screen"], thumbnailSize: { width: 0, height: 0 } })
         .then((fontes) => callback(fontes[0] ? { video: fontes[0], audio: "loopback" } : null))
@@ -608,7 +730,7 @@ app.whenReady().then(async () => {
     });
   }
   session.defaultSession.setPermissionCheckHandler((wc, permission, origin) => {
-    return permission === "media" && deEagleEye(origin || wc?.getURL() || "");
+    return permission === "media" && (deEagleEye(origin || wc?.getURL() || "") || ehGravador(wc));
   });
 
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: true });
@@ -651,9 +773,12 @@ app.on("window-all-closed", () => {});
 app.on("before-quit", () => {
   app.isQuitting = true;
   gravandoReuniao = false;
+  // Fecha os arquivos da reunião antes de sair: o que já foi gravado fica.
+  pararCofre({ avisarFim: false });
 });
 
 app.on("will-quit", () => {
+  pararCofre({ avisarFim: false });
   globalShortcut.unregisterAll();
   if (micListener) micListener.kill("SIGTERM");
   if (audioDoSistema) void audioDoSistema.parar();

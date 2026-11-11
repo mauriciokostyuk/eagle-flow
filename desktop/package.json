@@ -1,7 +1,7 @@
 {
   "name": "eagle-flow-desktop",
   "productName": "Eagle Flow",
-  "version": "2.3.2",
+  "version": "2.4.0",
   "description": "Eagle Flow: motor de ditado por voz. Tela e regras vêm do Eagle Eye.",
   "main": "main.js",
   "private": true,
@@ -36,6 +36,9 @@
       "versao.js",
       "atualizador.js",
       "reuniao.js",
+      "cofre.js",
+      "gravador.html",
+      "gravador-preload.js",
       "offline.html",
       "build/trayTemplate@3x.png",
       "build/icon.png",

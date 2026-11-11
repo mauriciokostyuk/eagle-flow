@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; worker-src blob:" />
+<title>Eagle Flow gravador</title>
+</head>
+<body>
+<script>
+  // Janela escondida do motor: grava o microfone (e no Windows o áudio do
+  // computador) em PCM 16 kHz e manda pro processo principal, que escreve o
+  // WAV em disco. Não depende da tela do Eagle Eye pra nada.
+  const TAXA = 16000;
+  const BLOCO = 1600; // 100 ms
+  const WORKLET = `
+    class Captura extends AudioWorkletProcessor {
+      process(entradas) {
+        const canal = entradas[0] && entradas[0][0];
+        if (canal) this.port.postMessage(canal);
+        return true;
+      }
+    }
+    registerProcessor("captura", Captura);
+  `;
+  const ativos = [];
+
+  function paraInt16(f32) {
+    const out = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) {
+      const s = Math.max(-1, Math.min(1, f32[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+
+  async function capturar(fonte, stream) {
+    const ctx = new AudioContext({ sampleRate: TAXA });
+    const url = URL.createObjectURL(new Blob([WORKLET], { type: "text/javascript" }));
+    await ctx.audioWorklet.addModule(url);
+    const origem = ctx.createMediaStreamSource(stream);
+    const no = new AudioWorkletNode(ctx, "captura", { numberOfOutputs: 0 });
+    let fila = new Int16Array(0);
+    no.port.onmessage = (ev) => {
+      const pedaco = paraInt16(ev.data);
+      const junto = new Int16Array(fila.length + pedaco.length);
+      junto.set(fila);
+      junto.set(pedaco, fila.length);
+      fila = junto;
+      if (fila.length >= BLOCO) {
+        window.gravador.pcm(fonte, new Uint8Array(fila.buffer, fila.byteOffset, fila.byteLength));
+        fila = new Int16Array(0);
+      }
+    };
+    origem.connect(no);
+    stream.getAudioTracks().forEach((t) => {
+      t.onended = () => window.gravador.aviso(fonte, "track_ended");
+    });
+    ativos.push({ ctx, stream });
+    window.gravador.aviso(fonte, "iniciou");
+  }
+
+  async function microfone() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true },
+        video: false,
+      });
+      await capturar("microfone", stream);
+    } catch (e) {
+      window.gravador.aviso("microfone", "erro:" + (e && e.name ? e.name : String(e)));
+    }
+  }
+
+  async function sistemaWindows() {
+    if (window.gravador.platform !== "win32") return;
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+      stream.getVideoTracks().forEach((t) => t.stop());
+      if (!stream.getAudioTracks().length) throw new Error("sem áudio");
+      await capturar("sistema", stream);
+    } catch (e) {
+      window.gravador.aviso("sistema", "erro:" + (e && e.name ? e.name : String(e)));
+    }
+  }
+
+  window.gravador.onParar(() => {
+    for (const { ctx, stream } of ativos) {
+      stream.getTracks().forEach((t) => t.stop());
+      ctx.close().catch(() => {});
+    }
+    ativos.length = 0;
+    window.gravador.aviso("todos", "parou");
+  });
+
+  microfone();
+  sistemaWindows();
+</script>
+</body>
+</html>
